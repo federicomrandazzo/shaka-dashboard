@@ -373,15 +373,6 @@ function renderDashboard(products, filename) {
   document.getElementById('c-bajo').textContent = `${varBajo} productos ≤5 unidades`;
   document.getElementById('c-valor').textContent = formatM(totalV);
 
-  // Populate rubro filter
-  const sel = document.getElementById('rubro-filter');
-  sel.innerHTML = '<option value="">Todos los rubros</option>';
-  for (const [r] of sorted) {
-    const opt = document.createElement('option');
-    opt.value = r; opt.textContent = r;
-    sel.appendChild(opt);
-  }
-
   // Charts
   const baseOpts = {
     indexAxis: 'y', responsive: true, maintainAspectRatio: false,
