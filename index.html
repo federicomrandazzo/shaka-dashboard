@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shaka · Tablero de Stock</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0d0d;
+      --surface: #161616;
+      --border: #252525;
+      --text: #f0f0f0;
+      --muted: #777;
+      --accent: #ff4f1f;
+      --accent-dim: rgba(255, 79, 31, 0.15);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── Upload ── */
+    #upload-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 20px;
+    }
+
+    .logo { font-size: 36px; font-weight: 900; letter-spacing: 6px; }
+    .sub  { font-size: 13px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+
+    .drop-zone {
+      width: 380px;
+      height: 180px;
+      border: 1.5px dashed var(--border);
+      border-radius: 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      margin-top: 8px;
+    }
+    .drop-zone:hover, .drop-zone.over {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+    .drop-icon { color: var(--muted); }
+    .drop-label { font-size: 13px; color: var(--muted); }
+
+    .btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: .5px;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 8px 16px;
+      border-radius: 7px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--text); }
+
+    .error-msg {
+      color: #ef4444;
+      font-size: 13px;
+      display: none;
+    }
+
+    /* ── Dashboard ── */
+    #dashboard { display: none; padding: 28px 32px; max-width: 1280px; margin: 0 auto; }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 28px;
+    }
+    .header-left { display: flex; align-items: baseline; gap: 12px; }
+    .header-logo { font-size: 18px; font-weight: 900; letter-spacing: 3px; }
+    .header-sub { font-size: 12px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+    .update-date { font-size: 11px; color: var(--muted); }
+
+    /* Cards */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+    .card-label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+    .card-value { font-size: 26px; font-weight: 700; line-height: 1; }
+    .card-sub { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+    /* Charts */
+    .charts {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    .chart-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+    }
+    .box-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      margin-bottom: 18px;
+    }
+
+    /* Table */
+    .table-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      overflow: hidden;
+    }
+    .table-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .table-filters { display: flex; gap: 8px; }
+    .filter-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .filter-btn.active, .filter-btn:hover {
+      border-color: var(--accent);
+      color: var(--text);
+      background: var(--accent-dim);
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 10px;
+      font-weight: 600;
+    }
+    td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.02); }
+
+    .tag {
+      display: inline-block;
+      background: var(--accent-dim);
+      color: var(--accent);
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .5px;
+    }
+    .badge-cero {
+      background: rgba(239,68,68,.15);
+      color: #ef4444;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-bajo {
+      background: rgba(245,158,11,.15);
+      color: #f59e0b;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-ok {
+      color: var(--text);
+      font-size: 11px;
+    }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── UPLOAD ── -->
+<div id="upload-screen">
+  <div class="logo">SHAKA</div>
+  <div class="sub">Tablero de Stock</div>
+
+  <div class="drop-zone" id="drop-zone">
+    <svg class="drop-icon" width="36" height="36" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M12 12V3m0 0L8 7m4-4 4 4"/>
+    </svg>
+    <span class="drop-label">Arrastrá el Excel de Seguimiento acá</span>
+    <button class="btn" onclick="document.getElementById('file-input').click()">Elegir archivo</button>
+  </div>
+  <div class="error-msg" id="error-msg"></div>
+  <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none">
+</div>
+
+<!-- ── DASHBOARD ── -->
+<div id="dashboard">
+  <header>
+    <div class="header-left">
+      <span class="header-logo">SHAKA</span>
+      <span class="header-sub">Stock</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;">
+      <span class="update-date" id="update-date"></span>
+      <button class="btn-ghost" onclick="resetToUpload()">↑ Actualizar datos</button>
+    </div>
+  </header>
+
+  <!-- Cards -->
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Productos</div>
+      <div class="card-value" id="c-productos">—</div>
+      <div class="card-sub" id="c-rubros">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Unidades en stock</div>
+      <div class="card-value" id="c-unidades">—</div>
+      <div class="card-sub" id="c-variantes">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Sin stock</div>
+      <div class="card-value" id="c-cero" style="color:#ef4444">—</div>
+      <div class="card-sub" id="c-bajo">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Valor retail</div>
+      <div class="card-value" id="c-valor">—</div>
+      <div class="card-sub">precio efectivo × stock</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts">
+    <div class="chart-box">
+      <div class="box-title">Unidades por rubro</div>
+      <canvas id="chart-u" height="260"></canvas>
+    </div>
+    <div class="chart-box">
+      <div class="box-title">Valor retail por rubro</div>
+      <canvas id="chart-v" height="260"></canvas>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-box">
+    <div class="table-header">
+      <div class="box-title" style="margin-bottom:0">Detalle de productos</div>
+      <div class="table-filters">
+        <button class="filter-btn active" onclick="setFilter('todos', this)">Todos</button>
+        <button class="filter-btn" onclick="setFilter('cero', this)">Sin stock</button>
+        <button class="filter-btn" onclick="setFilter('bajo', this)">Stock bajo (≤5)</button>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Producto</th>
+          <th>Rubro</th>
+          <th class="num">Unidades</th>
+          <th class="num">Precio</th>
+          <th class="num">Valor stock</th>
+        </tr>
+      </thead>
+      <tbody id="prod-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// ── File handling ──
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('over'); handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function resetToUpload() {
+  document.getElementById('upload-screen').style.display = 'flex';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('error-msg').style.display = 'none';
+  fileInput.value = '';
+}
+
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets['datos stock'];
+      if (!ws) { showError('No se encontró la hoja "datos stock" en el archivo.'); return; }
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      const products = processRows(rows);
+      if (!products.length) { showError('No se encontraron productos con datos válidos.'); return; }
+      renderDashboard(products, file.name);
+    } catch (err) {
+      showError('Error al leer el archivo: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── Data processing ──
+function parseNum(val) {
+  if (typeof val === 'number') return isFinite(val) ? val : 0;
+  if (typeof val === 'string' && val.trim()) {
+    // TN format: dot=thousands, comma=decimal → or already converted
+    const cleaned = val.replace(/\./g, '').replace(',', '.');
+    return parseFloat(cleaned) || 0;
+  }
+  return 0;
+}
+
+function isError(val) {
+  if (val === null || val === undefined || val === '') return true;
+  if (typeof val === 'object') return true; // SheetJS error object
+  if (typeof val === 'string' && val.startsWith('#')) return true;
+  return false;
+}
+
+function processRows(rows) {
+  // Col indices (0-based):
+  // B=1, J=9, K=10, P=15, AE=30, AF=31, AH=33, AJ=35
+  const products = {};
+  let curNombre = '', curRubro = '';
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.length < 2) continue;
+
+    const af = row[31]; // AF: nombre propagado
+    const ae = row[30]; // AE: categoría TN propagada
+    const ah = row[33]; // AH: rubro simplificado (VLOOKUP)
+
+    const nombre = (!isError(af) && af !== '') ? String(af).trim() : curNombre;
+    let rubro = '';
+    if (!isError(ah) && ah !== '') {
+      rubro = String(ah).trim();
+    } else if (!isError(ae) && ae !== '') {
+      // Fallback to TN category - take first part before comma
+      rubro = String(ae).split(',')[0].trim();
+    } else {
+      rubro = curRubro || 'SIN RUBRO';
+    }
+
+    if (nombre) curNombre = nombre;
+    if (rubro) curRubro = rubro;
+    if (!curNombre) continue;
+
+    const stock = parseNum(row[15]); // P
+    const precioBase  = parseNum(row[9]);  // J
+    const precioPromo = parseNum(row[10]); // K
+    const precio = precioPromo > 0 ? precioPromo : precioBase;
+
+    const key = curNombre;
+    if (!products[key]) {
+      products[key] = { nombre: curNombre, rubro: curRubro, totalStock: 0, precio: 0, variantes: 0 };
+    }
+    products[key].totalStock += stock;
+    products[key].variantes += 1;
+    if (precio > 0 && products[key].precio === 0) products[key].precio = precio;
+  }
+
+  return Object.values(products).filter(p => p.nombre && p.variantes > 0);
+}
+
+// ── Chart instances ──
+let cU = null, cV = null;
+let allProducts = [];
+let activeFilter = 'todos';
+
+function renderDashboard(products, filename) {
+  allProducts = products;
+  document.getElementById('upload-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('update-date').textContent = 'Datos: ' + filename;
+
+  // Aggregate by rubro
+  const rubros = {};
+  for (const p of products) {
+    const r = p.rubro || 'SIN RUBRO';
+    if (!rubros[r]) rubros[r] = { unidades: 0, valor: 0, prods: 0 };
+    rubros[r].unidades += p.totalStock;
+    rubros[r].valor += p.totalStock * p.precio;
+    rubros[r].prods += 1;
+  }
+  const sorted = Object.entries(rubros).sort((a, b) => b[1].unidades - a[1].unidades);
+  const labels = sorted.map(e => e[0]);
+  const unids  = sorted.map(e => e[1].unidades);
+  const vals   = sorted.map(e => e[1].valor);
+
+  const totalU = unids.reduce((a, b) => a + b, 0);
+  const totalV = vals.reduce((a, b) => a + b, 0);
+  const cero   = products.filter(p => p.totalStock === 0).length;
+  const bajo   = products.filter(p => p.totalStock > 0 && p.totalStock <= 5).length;
+
+  // Cards
+  document.getElementById('c-productos').textContent = products.length.toLocaleString('es-AR');
+  document.getElementById('c-rubros').textContent = `en ${sorted.length} rubros`;
+  document.getElementById('c-unidades').textContent = totalU.toLocaleString('es-AR');
+  document.getElementById('c-variantes').textContent = `variantes en stock`;
+  document.getElementById('c-cero').textContent = cero.toLocaleString('es-AR');
+  document.getElementById('c-bajo').textContent = `${bajo} con stock bajo (≤5)`;
+  document.getElementById('c-valor').textContent = formatM(totalV);
+
+  // Charts
+  const baseOpts = {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: '#1e1e1e' }, ticks: { color: '#666', font: { size: 10 } } },
+      y: { grid: { display: false }, ticks: { color: '#bbb', font: { size: 11 } } }
+    }
+  };
+
+  if (cU) cU.destroy();
+  if (cV) cV.destroy();
+
+  cU = new Chart(document.getElementById('chart-u'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ data: unids, backgroundColor: '#ff4f1f', borderRadius: 4, borderSkipped: false }]
+    },
+    options: {
+      ...baseOpts,
+      plugins: {
+        ...baseOpts.plugins,
+        tooltip: { callbacks: { label: ctx => ` ${ctx.raw.toLocaleString('es-AR')} u` } }
+      }
+    }
+  });
+
+  cV = new Chart(document.getElementById('chart-v'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ data: vals, backgroundColor: 'rgba(255,79,31,.5)', borderColor: '#ff4f1f', borderWidth: 1, borderRadius: 4, borderSkipped: false }]
+    },
+    options: {
+      ...baseOpts,
+      plugins: {
+        ...baseOpts.plugins,
+        tooltip: { callbacks: { label: ctx => ` $${Math.round(ctx.raw).toLocaleString('es-AR')}` } }
+      },
+      scales: {
+        ...baseOpts.scales,
+        x: {
+          ...baseOpts.scales.x,
+          ticks: {
+            color: '#666', font: { size: 10 },
+            callback: v => v >= 1e6 ? '$' + (v/1e6).toFixed(1) + 'M' : v >= 1e3 ? '$' + (v/1e3).toFixed(0) + 'K' : '$' + v
+          }
+        }
+      }
+    }
+  });
+
+  setFilter('todos', document.querySelector('.filter-btn.active'));
+}
+
+function setFilter(mode, btn) {
+  activeFilter = mode;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTable();
+}
+
+function renderTable() {
+  const tbody = document.getElementById('prod-tbody');
+  tbody.innerHTML = '';
+
+  let list = [...allProducts];
+  if (activeFilter === 'cero') list = list.filter(p => p.totalStock === 0);
+  if (activeFilter === 'bajo') list = list.filter(p => p.totalStock > 0 && p.totalStock <= 5);
+  list.sort((a, b) => a.totalStock - b.totalStock || a.nombre.localeCompare(b.nombre));
+
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay productos con ese filtro.</td></tr>';
+    return;
+  }
+
+  for (const p of list) {
+    const valor = p.totalStock * p.precio;
+    let badge = '';
+    if (p.totalStock === 0) badge = `<span class="badge-cero">SIN STOCK</span>`;
+    else if (p.totalStock <= 5) badge = `<span class="badge-bajo">${p.totalStock}</span>`;
+    else badge = `<span class="badge-ok">${p.totalStock.toLocaleString('es-AR')}</span>`;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(p.nombre)}</td>
+      <td><span class="tag">${escapeHtml(p.rubro)}</span></td>
+      <td class="num">${badge}</td>
+      <td class="num">$${Math.round(p.precio).toLocaleString('es-AR')}</td>
+      <td class="num">${valor > 0 ? '$' + Math.round(valor).toLocaleString('es-AR') : '—'}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function formatM(n) {
+  if (n >= 1e9) return '$' + (n/1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
+  return '$' + Math.round(n).toLocaleString('es-AR');
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
