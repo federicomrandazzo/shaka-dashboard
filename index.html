@@ -417,7 +417,7 @@ function renderTable() {
   let list = [...allProducts];
   if (rubroSel) list = list.filter(p => p.rubro === rubroSel);
   if (activeFilter === 'bajo') list = list.filter(p => p.totalStock <= 5);
-  list.sort((a,b) => a.totalStock - b.totalStock || a.nombre.localeCompare(b.nombre));
+  list.sort((a,b) => (b.totalStock * b.precio) - (a.totalStock * a.precio));
 
   if (!list.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No hay productos con ese filtro.</td></tr>';
