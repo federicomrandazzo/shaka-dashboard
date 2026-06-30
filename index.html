@@ -86,6 +86,14 @@
     .chevron.open { transform: rotate(90deg); color: var(--accent); }
     .product-row td { background: #fff; }
     .product-row:hover td { background: #fafafa; }
+
+    .ajustes { display: flex; align-items: center; gap: 20px; padding: 10px 0 14px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
+    .ajuste-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 6px; }
+    .ajuste-input { width: 60px; border: 1px solid var(--border); border-radius: 3px; padding: 4px 8px; font-size: 12px; font-family: inherit; color: var(--text); background: #fff; text-align: right; }
+    .ajuste-input:focus { outline: none; border-color: var(--accent); }
+    .ajuste-sep { width: 1px; height: 16px; background: var(--border); }
+
+    .total-row td { background: #f0f0f0; font-weight: 700; border-top: 2px solid var(--border); border-bottom: none; }
   </style>
 </head>
 <body>
@@ -161,6 +169,17 @@
         <button class="filter-btn active" onclick="setFilter('todos',this)">Todos</button>
         <button class="filter-btn" onclick="setFilter('bajo',this)">Stock bajo (≤5)</button>
       </div>
+    </div>
+    <div class="ajustes">
+      <span class="ajuste-label">
+        Descuento
+        <input class="ajuste-input" type="number" id="inp-desc" value="0" min="0" max="100"> %
+      </span>
+      <div class="ajuste-sep"></div>
+      <span class="ajuste-label">
+        Costo MP
+        <input class="ajuste-input" type="number" id="inp-mp" value="15" min="0" max="100"> %
+      </span>
     </div>
     <table>
       <thead>
@@ -405,6 +424,21 @@ function renderDashboard(products, filename) {
   setFilter('todos', document.querySelector('.filter-btn.active'));
 }
 
+function getMultiplier() {
+  const desc = parseFloat(document.getElementById('inp-desc').value) || 0;
+  const mp   = parseFloat(document.getElementById('inp-mp').value)  || 0;
+  return (1 - desc / 100) * (1 - mp / 100);
+}
+
+function adjValor(precio, stock) {
+  return Math.round(precio * stock * getMultiplier());
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('inp-desc').addEventListener('input', renderTable);
+  document.getElementById('inp-mp').addEventListener('input', renderTable);
+});
+
 function setFilter(mode, btn) {
   activeFilter = mode;
   document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
@@ -443,12 +477,15 @@ function renderTable() {
     return;
   }
 
+  let grandU = 0, grandV = 0;
+
   for (const [rubro, prods] of sortedGroups) {
     const gid    = 'g-' + rubro.replace(/[^a-z0-9]/gi, '_');
     const totalU = prods.reduce((s, p) => s + p.totalStock, 0);
-    const totalV = prods.reduce((s, p) => s + p.totalStock * p.precio, 0);
+    const totalV = prods.reduce((s, p) => s + adjValor(p.precio, p.totalStock), 0);
+    grandU += totalU;
+    grandV += totalV;
 
-    // Rubro header row
     const htr = document.createElement('tr');
     htr.className = 'rubro-row';
     htr.innerHTML = `
@@ -462,15 +499,14 @@ function renderTable() {
       <td class="num" style="font-weight:700">${totalU.toLocaleString('es-AR')}</td>
       <td class="num"></td>
       <td class="num"></td>
-      <td class="num" style="font-weight:700">$${Math.round(totalV).toLocaleString('es-AR')}</td>
+      <td class="num" style="font-weight:700">$${totalV.toLocaleString('es-AR')}</td>
     `;
     htr.addEventListener('click', () => toggleGroup(gid, document.getElementById('chev-' + gid)));
     tbody.appendChild(htr);
 
-    // Product rows (collapsed by default)
-    const sorted = [...prods].sort((a, b) => (b.totalStock * b.precio) - (a.totalStock * a.precio));
+    const sorted = [...prods].sort((a, b) => adjValor(b.precio, b.totalStock) - adjValor(a.precio, a.totalStock));
     for (const p of sorted) {
-      const valor = p.totalStock * p.precio;
+      const valor = adjValor(p.precio, p.totalStock);
       const stockBadge = p.totalStock <= 5
         ? `<span class="badge-bajo">${p.totalStock}</span>`
         : p.totalStock.toLocaleString('es-AR');
@@ -483,11 +519,23 @@ function renderTable() {
         <td class="num">${stockBadge}</td>
         <td class="num" style="color:var(--muted);font-size:12px">${p.varCon}/${p.variantes}</td>
         <td class="num" style="font-size:12px">$${Math.round(p.precio).toLocaleString('es-AR')}</td>
-        <td class="num" style="font-size:12px">${valor > 0 ? '$'+Math.round(valor).toLocaleString('es-AR') : '—'}</td>
+        <td class="num" style="font-size:12px">${valor > 0 ? '$'+valor.toLocaleString('es-AR') : '—'}</td>
       `;
       tbody.appendChild(ptr);
     }
   }
+
+  // Total row
+  const ttr = document.createElement('tr');
+  ttr.className = 'total-row';
+  ttr.innerHTML = `
+    <td>TOTAL</td>
+    <td class="num">${grandU.toLocaleString('es-AR')}</td>
+    <td class="num"></td>
+    <td class="num"></td>
+    <td class="num">$${grandV.toLocaleString('es-AR')}</td>
+  `;
+  tbody.appendChild(ttr);
 }
 
 function formatM(n) {
